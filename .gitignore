@@ -47,3 +47,12 @@ RequestReduceContent/
 # Don't include upgrade report
 UpgradeLog.XML
 _UpgradeReport_Files/
+*.userprefs
+
+# Build related
+#Ignores the folder and its contents
+build/artifacts/
+#Does not ignore the 'tools' folder itself, only its contents
+build/tools/**
+#Removes packages.config from the ignore list, the 'tools' folder must not be ignored for this to work
+!build/tools/packages.config

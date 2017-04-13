@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package>
+  <metadata>
+    <id>ChilliSource.Cloud.Web.Api</id>
+    <version>$version$</version>
+    <title>ChilliSource Cloud Web.Api</title>
+    <description>Web.Api Library for ChilliSource.Cloud framework</description>
+    <authors>$authors$</authors>
+    <owners>$owners$</owners>
+    <requireLicenseAcceptance>$requireLicenseAcceptance$</requireLicenseAcceptance>
+    <copyright>$copyright$</copyright>
+    <projectUrl>$projectUrl$</projectUrl>    
+    <licenseUrl>$licenceUrl$</licenseUrl>
+    <releaseNotes>$releaseNotes$</releaseNotes>
+    <tags>$tags$</tags>
+	<dependencies>	    				
+		<dependency id="ChilliSource.Cloud.Core" version="1.0.0" />	
+		<dependency id="ChilliSource.Cloud.Web" version="1.0.0" />	
+		<dependency id="Microsoft.AspNet.WebApi.Client" version="5.2.3" />
+		<dependency id="Microsoft.AspNet.WebApi.Core" version="5.2.3" />
+		<dependency id="Newtonsoft.Json" version="10.0.1" />
+		<dependency id="Serilog" version="2.4.0" />
+	</dependencies>
+  </metadata>
+  <files>    	
+	<file src="src/ChilliSource.Cloud.Web.Api/bin/Release/net461/ChilliSource.Cloud.Web.Api.dll" target="lib\net461" />
+	<file src="src/ChilliSource.Cloud.Web.Api/bin/Release/net461/ChilliSource.Cloud.Web.Api.xml" target="lib\net461" />
+	<file src="src/ChilliSource.Cloud.Web.Api/bin/Release/net461/ChilliSource.Cloud.Web.Api.pdb" target="lib\net461" />
+	<file src="src/ChilliSource.Cloud.Web.Api/bin/Release/net462/ChilliSource.Cloud.Web.Api.dll" target="lib\net462" />
+	<file src="src/ChilliSource.Cloud.Web.Api/bin/Release/net462/ChilliSource.Cloud.Web.Api.xml" target="lib\net462" />
+	<file src="src/ChilliSource.Cloud.Web.Api/bin/Release/net462/ChilliSource.Cloud.Web.Api.pdb" target="lib\net462" />
+  </files>
+</package>

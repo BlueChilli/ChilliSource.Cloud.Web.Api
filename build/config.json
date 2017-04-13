@@ -1,0 +1,14 @@
+{
+	"productName" : "ChilliSource Cloud Web.Api",
+	"projectName" : "ChilliSource.Cloud.Web.Api",
+	"githubOwner": "BlueChilli",
+	"githubRepository": "ChilliSource.Cloud.Web.Api",
+	"packageWhiteList": ["ChilliSource.Cloud.Web.Api"],
+	"solutionFile" : "../src/ChilliSource.Cloud.Web.Api.sln",
+	"tags": [ "ChilliSource", "ChilliSource Cloud Web.Api"],
+	"authors" : ["Blue Chilli Technology Pty Ltd"],
+	"copyright" : "Copyright Blue Chilli Technology Pty Ltd 2017",
+	"iconUrl": "https://avatars0.githubusercontent.com/u/5924219?v=3&s=200",
+	"testProjectPath": "../src/ChilliSource.Cloud.Web.Api.Tests/ChilliSource.Cloud.Web.Api.Tests.csproj",
+	"nuspecRootPath" : "../"
+}
