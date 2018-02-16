@@ -7,7 +7,8 @@ using System.Text.RegularExpressions;
 
 #addin "Cake.FileHelpers"
 #addin "Cake.Incubator"
-#addin nuget:?package=Newtonsoft.Json
+
+#addin "nuget:?package=Newtonsoft.Json"
 //////////////////////////////////////////////////////////////////////
 // TOOLS
 //////////////////////////////////////////////////////////////////////
@@ -81,13 +82,14 @@ var isRunningOnUnix = IsRunningOnUnix();
 var isRunningOnWindows = IsRunningOnWindows();
 var teamCity = BuildSystem.TeamCity;
 var branch = EnvironmentVariable("Git_Branch");
-var isPullRequest = !String.IsNullOrEmpty(branch) && branch.ToUpper().Contains("PULL-REQUEST"); //teamCity.Environment.PullRequest.IsPullRequest;
+var isPullRequest = !String.IsNullOrEmpty(branch) && branch.ToLower().Contains("refs/pull"); //teamCity.Environment.PullRequest.IsPullRequest;
 var projectName =  EnvironmentVariable("TEAMCITY_PROJECT_NAME"); //  teamCity.Environment.Project.Name;
 var isRepository = StringComparer.OrdinalIgnoreCase.Equals(productName, projectName);
-var isTagged = !String.IsNullOrEmpty(branch) && branch.ToUpper().Contains("TAGS");
+var isTagged = !String.IsNullOrEmpty(branch) && branch.ToUpper().Contains("refs/tags");
 var buildConfName = EnvironmentVariable("TEAMCITY_BUILDCONF_NAME"); //teamCity.Environment.Build.BuildConfName
 var buildNumber = GetEnvironmentInteger("BUILD_NUMBER");
 var isReleaseBranch = StringComparer.OrdinalIgnoreCase.Equals("master", buildConfName)|| StringComparer.OrdinalIgnoreCase.Equals("release", buildConfName);
+
 var shouldAddLicenseHeader = false;
 if(!string.IsNullOrEmpty(EnvironmentVariable("ShouldAddLicenseHeader"))) {
 	shouldAddLicenseHeader = bool.Parse(EnvironmentVariable("ShouldAddLicenseHeader"));
@@ -99,12 +101,32 @@ var githubUrl = string.Format("https://github.com/{0}/{1}", githubOwner, githubR
 var licenceUrl = string.Format("{0}/blob/master/LICENSE", githubUrl);
 
 // Version
-var gitVersion = GitVersion();
-var majorMinorPatch = gitVersion.MajorMinorPatch;
-var semVersion = gitVersion.SemVer;
-var informationalVersion = gitVersion.InformationalVersion;
-var nugetVersion = gitVersion.NuGetVersion;
-var buildVersion = gitVersion.FullBuildMetaData;
+string majorMinorPatch;
+string semVersion;
+string informationalVersion ;
+string nugetVersion;
+string buildVersion;
+
+Action SetGitVersionData = () => {
+
+	if(!isPullRequest) {
+		var gitVersion = GitVersion();
+		majorMinorPatch = gitVersion.MajorMinorPatch;
+		semVersion = gitVersion.SemVer;
+		informationalVersion = gitVersion.InformationalVersion;
+		nugetVersion = gitVersion.NuGetVersion;
+		buildVersion = gitVersion.FullBuildMetaData;
+	}
+	else {
+		majorMinorPatch = "1.0.0";
+		semVersion = "0";
+		informationalVersion ="1.0.0";
+		nugetVersion = "1.0.0";
+		buildVersion = "alpha";
+	}
+};
+
+SetGitVersionData();
 var copyright = config.Value<string>("copyright");
 var authors = config.Value<JArray>("authors").Values<string>().ToList();
 var iconUrl = config.Value<string>("iconUrl");
@@ -125,43 +147,12 @@ Action Abort = () => { throw new Exception("A non-recoverable fatal error occurr
 Action<string> TestFailuresAbort = testResult => { throw new Exception(testResult); };
 Action NonMacOSAbort = () => { throw new Exception("Running on platforms other macOS is not supported."); };
 
-Action<string> RestorePackages = (solution) =>
-{
-    DotNetCoreRestore(solution);
-};
-
 Action<DirectoryPathCollection> PrintDirectories = (directories) => 
 {
 	foreach(var directory in directories)
 	{
 		Information("{0}\n", directory);
 	}
-};
-
-Action<string, string> Package = (nuspec, basePath) =>
-{
-    CreateDirectory(artifactDirectory);
-
-    Information("Packaging {0} using {1} as the BasePath.", nuspec, basePath);
-
-    NuGetPack(nuspec, new NuGetPackSettings {
-        Authors                  = authors,
-        Owners                   = authors,
-        ProjectUrl               = new Uri(githubUrl),
-        IconUrl                  = new Uri(iconUrl),
-        LicenseUrl               = new Uri(licenceUrl),
-        Copyright                = copyright,
-        RequireLicenseAcceptance = false,
-
-        Version                  = nugetVersion,
-        Tags                     = tags,
-        ReleaseNotes             = new [] { string.Format("{0}/releases", githubUrl) },
-
-        Symbols                  = false,
-        Verbosity                = NuGetVerbosity.Detailed,
-        OutputDirectory          = artifactDirectory,
-        BasePath                 = basePath
-    });
 };
 
 Action<string, string, Exception> WriteErrorLog = (message, identity, ex) => 
@@ -205,12 +196,22 @@ Action<string> build = (solution) =>
     Information("Building {0}", solution);
 	using(BuildBlock("Build")) 
 	{			
-		MSBuild(solution, settings => {
+		MSBuild(solution, settings => { 
 				settings
 				.SetConfiguration(configuration)
-				.WithProperty("NoWarn", "1591") // ignore missing XML doc warnings
+	            .WithTarget("restore;pack")
+		        .WithProperty("PackageOutputPath",  MakeAbsolute(Directory(artifactDirectory)).ToString())
+    			.WithProperty("NoWarn", "1591") // ignore missing XML doc warnings
 				.WithProperty("TreatWarningsAsErrors", treatWarningsAsErrors.ToString())
-				.SetVerbosity(Verbosity.Minimal)
+			    .WithProperty("Version", nugetVersion.ToString())
+			    .WithProperty("Authors",  "\"" + string.Join(" ", authors) + "\"")
+			    .WithProperty("Copyright",  "\"" + copyright + "\"")
+			    .WithProperty("PackageProjectUrl",  "\"" + githubUrl + "\"")
+			    .WithProperty("PackageIconUrl",  "\"" + iconUrl + "\"")
+			    .WithProperty("PackageLicenseUrl",  "\"" + licenceUrl + "\"")
+			    .WithProperty("PackageTags",  "\"" + string.Join(" ", tags) + "\"")
+			    .WithProperty("PackageReleaseNotes",  "\"" +  string.Format("{0}/releases", githubUrl) + "\"")
+			  	.SetVerbosity(Verbosity.Minimal)
 				.SetNodeReuse(false);
 
 				var msBuildLogger = GetMSBuildLoggerArguments();
@@ -260,10 +261,10 @@ Setup((context) =>
 		CleanDirectory(Directory(artifactDirectory));		
 });
 
-Teardown((context) =>
-{
-    // Executed AFTER the last task.
-});
+// Teardown((context) =>
+// {
+//     // Executed AFTER the last task.
+// });
 
 //////////////////////////////////////////////////////////////////////
 // TASKS
@@ -271,8 +272,6 @@ Teardown((context) =>
 
 Task("Build")
 	.IsDependentOn("AddLicense")
-    .IsDependentOn("RestorePackages")
-    .IsDependentOn("UpdateAssemblyInfo")
     .Does (() =>
 {
     build(buildSolution);
@@ -297,44 +296,9 @@ Task("AddLicense")
 		Information("Make sure the bash (sh) directory is set in your environment path.");
 	});
 
-Task("UpdateAssemblyInfo")
-    .Does (() =>
-{
-    var file = "../src/CommonAssemblyInfo.cs";
-
-	using(BuildBlock("UpdateAssemblyInfo")) 
-	{
-		CreateAssemblyInfo(file, new AssemblyInfoSettings {
-			Product = productName,
-			Version = majorMinorPatch,
-			FileVersion = majorMinorPatch,
-			InformationalVersion = informationalVersion,
-			Copyright = copyright
-		});
-	};
-   
-})
-.OnError(exception => {
-	WriteErrorLog("updating assembly info failed", "UpdateAssemblyInfo", exception);
-});
-
-Task("RestorePackages")
-.Does (() =>
-{
-    Information("Restoring Packages for {0}", buildSolution);
-	using(BuildBlock("RestorePackages")) 
-	{
-	    RestorePackages(buildSolution);
-	};
-})
-.OnError(exception => {
-	WriteErrorLog("restoring packages failed", "RestorePackages", exception);
-});
-
 
 var testProject = config.Value<string>("testProjectPath");
 Task("RunUnitTests")
-    .IsDependentOn("RestorePackages")
     .IsDependentOn("Build")
     .Does(() =>
 {
@@ -353,36 +317,9 @@ Task("RunUnitTests")
 	};
 });
 
-var nuspecPath = config.Value<string>("nuspecRootPath");
 
-Task("Package")
-    .IsDependentOn("Build")
+Task("PublishPackages")	
     .IsDependentOn("RunUnitTests")
-    .Does (() =>
-{
-	using(BuildBlock("Package")) 
-	{
-		foreach(var package in packageWhitelist)
-		{
-			// only push the package which was created during this build run.
-			var packagePath = string.Format("../src/{0}.nuspec", package);
-
-			// Push the package.
-			Package(packagePath, nuspecPath);
-		}
-	};
-
-    
-})
-.OnError(exception => {
-	WriteErrorLog("Generating packages failed", "Package", exception);
-});
-
-
-Task("PublishPackages")
-	.IsDependentOn("Build")
-    .IsDependentOn("RunUnitTests")
-    .IsDependentOn("Package")
     .WithCriteria(() => !local)
     .WithCriteria(() => !isPullRequest)
     .WithCriteria(() => isRepository)
@@ -447,10 +384,8 @@ Task("PublishPackages")
 	WriteErrorLog("publishing packages failed", "PublishPackages", exception);
 });
 
-Task("CreateRelease")
-    .IsDependentOn("Build")
+Task("CreateRelease")    
     .IsDependentOn("RunUnitTests")
-    .IsDependentOn("Package")
     .WithCriteria(() => !local)
     .WithCriteria(() => !isPullRequest)
     .WithCriteria(() => isRepository)
@@ -487,9 +422,7 @@ Task("CreateRelease")
 });
 
 Task("PublishRelease")
-   .IsDependentOn("Build")
     .IsDependentOn("RunUnitTests")
-    .IsDependentOn("Package")
     .WithCriteria(() => !local)
     .WithCriteria(() => !isPullRequest)
     .WithCriteria(() => isRepository)
