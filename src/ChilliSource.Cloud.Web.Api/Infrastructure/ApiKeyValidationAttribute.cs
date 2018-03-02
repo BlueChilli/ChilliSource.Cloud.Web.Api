@@ -12,7 +12,7 @@ namespace ChilliSource.Cloud.Web.Api
     {
         public override void OnActionExecuting(HttpActionContext actionContext)
         {
-            var apiConfig = ApiSection.GetConfig();
+            var configApiKey = GlobalApiConfiguration.Instance.ApiKey;
 
             if (ShouldCheckApiKey(actionContext))
             {
@@ -21,7 +21,7 @@ namespace ChilliSource.Cloud.Web.Api
                 apiKey = apiKey ?? HttpContext.Current.Request.Headers[apiKeyHeaderKey.ToLower()];
                 apiKey = apiKey ?? HttpContext.Current.Request.QueryString[apiKeyHeaderKey];
 
-                if (string.Compare(apiConfig.ApiKey, apiKey, StringComparison.InvariantCultureIgnoreCase) != 0)
+                if (string.Compare(configApiKey, apiKey, StringComparison.InvariantCultureIgnoreCase) != 0)
                 {
                     var result = ServiceResult.AsError("Api key is invalid");
                     actionContext.Response = actionContext.Request.CreateApiErrorResponseMessage(result);
