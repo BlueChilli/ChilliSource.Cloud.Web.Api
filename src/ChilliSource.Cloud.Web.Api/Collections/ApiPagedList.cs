@@ -25,6 +25,7 @@ namespace ChilliSource.Cloud.Web.Api
         public int PageCount { get; set; }
         public int PageSize { get; set; }
         public int TotalCount { get; set; }
+        public int? PagingMaxId { get; set; }
         public List<T> Data { get; set; }
     }
 }

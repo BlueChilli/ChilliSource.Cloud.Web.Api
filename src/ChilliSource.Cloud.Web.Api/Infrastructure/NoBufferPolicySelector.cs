@@ -56,10 +56,13 @@ namespace ChilliSource.Cloud.Web.Api
             return base.UseBufferedInputStream(hostContext);
         }
 
-        //Base class already checks for PushStreamContent and StreamContent
-        //public override bool UseBufferedOutputStream(HttpResponseMessage response)
-        //{
-        //    return base.UseBufferedOutputStream(response);
-        //}
+        public override bool UseBufferedOutputStream(HttpResponseMessage response)
+        {
+            if (response.Content is StreamedHttpContent)
+                return false;
+
+            //base class already checks for PushStreamContent and StreamContent
+            return base.UseBufferedOutputStream(response);
+        }
     }
 }
