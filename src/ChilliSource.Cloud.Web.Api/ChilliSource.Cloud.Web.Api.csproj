@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <Compile Include="..\CommonAssemblyInfo.cs" Link="Properties\CommonAssemblyInfo.cs" />
-    <PackageReference Include="ChilliSource.Cloud.Web" Version="1.0.0-alpha0007" />
+    <PackageReference Include="ChilliSource.Cloud.Web" Version="1.0.1-alpha0008" />
     <PackageReference Include="ChilliSource.Cloud.Core" Version="1.0.1-alpha0021" />
     <PackageReference Include="Microsoft.AspNet.WebApi.Client" Version="5.2.3" />
     <PackageReference Include="Microsoft.AspNet.WebApi.Core" Version="5.2.3" />
