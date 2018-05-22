@@ -15,11 +15,18 @@ namespace ChilliSource.Cloud.Web.Api
     {
         private List<PipedStreamManager> _createdStreams = new List<PipedStreamManager>();
         IPipeActionRunner _pipeActionRunner = null;
+        PipedStreamOptions _options = null;
 
         public MultiPartPipedStreamProvider()
         {
             //default action does nothing (the stream will get closed by the action runner)
             _pipeActionRunner = new PipeActionRunner<object>(this, (content, headers, stream) => { return null; });
+        }
+
+        public MultiPartPipedStreamProvider(PipedStreamOptions options)
+            : this()
+        {
+            _options = options;
         }
 
         /// <summary>
@@ -75,7 +82,7 @@ namespace ChilliSource.Cloud.Web.Api
                 throw new ArgumentNullException("headers");
             }
 
-            var pipedStream = new PipedStreamManager();
+            var pipedStream = _options == null ? new PipedStreamManager() : new PipedStreamManager(_options);
             _pipeActionRunner.CreateNewReaderTaskForPipe(parent, headers, pipedStream);
 
             return pipedStream.CreateWriter(throwsFailedWrite: true);
