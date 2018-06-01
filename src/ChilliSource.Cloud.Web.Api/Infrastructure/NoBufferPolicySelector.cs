@@ -46,14 +46,24 @@ namespace ChilliSource.Cloud.Web.Api
 
             if (context != null && context.Request != null)
             {
-                var executionFilePath = context.Request.AppRelativeCurrentExecutionFilePath;
+                var buffered = UseBufferedInputStream(context.Request);
 
-                var streamed = StreamedInputRelativePaths.Any(path => executionFilePath.StartsWith(path, StringComparison.InvariantCultureIgnoreCase));
-                if (streamed)
+                if (!buffered)
                     return false;
             }
 
             return base.UseBufferedInputStream(hostContext);
+        }
+
+        public bool UseBufferedInputStream(HttpRequestBase request)
+        {
+            if (request == null)
+                throw new ArgumentNullException("request");
+
+            var executionFilePath = request.AppRelativeCurrentExecutionFilePath;
+
+            var buffered = !StreamedInputRelativePaths.Any(path => executionFilePath.StartsWith(path, StringComparison.InvariantCultureIgnoreCase));
+            return buffered;
         }
 
         public override bool UseBufferedOutputStream(HttpResponseMessage response)
