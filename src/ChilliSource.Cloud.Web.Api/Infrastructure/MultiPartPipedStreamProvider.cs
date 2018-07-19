@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -20,7 +21,7 @@ namespace ChilliSource.Cloud.Web.Api
         public MultiPartPipedStreamProvider()
         {
             //default action does nothing (the stream will get closed by the action runner)
-            _pipeActionRunner = new PipeActionRunner<object>(this, (content, headers, stream) => { return null; });
+            _pipeActionRunner = new PipeActionRunner<object>(this, (content, headers, stream, cancellationToken) => { return null; });
         }
 
         public MultiPartPipedStreamProvider(PipedStreamOptions options)
@@ -49,20 +50,20 @@ namespace ChilliSource.Cloud.Web.Api
             return result;
         }
 
-        public IPipeActionRunner<T> SetStreamedFileAction<T>(Func<StreamedHttpFile, Task<T>> asyncAction)
+        public IPipeActionRunner<T> SetStreamedFileAction<T>(Func<StreamedHttpFile, CancellationToken, Task<T>> asyncAction)
         {
-            return this.SetStreamedPipeAction<T>(async (content, headers, stream) =>
+            return this.SetStreamedPipeAction<T>(async (content, headers, stream, cancellationToken) =>
             {
                 string fileName = FixFilename(headers.ContentDisposition.FileName);
                 string mediaType = headers.ContentType?.MediaType;
 
                 var postedFile = new StreamedHttpFile(fileName, mediaType, stream);
 
-                return await asyncAction(postedFile);
+                return await asyncAction(postedFile, cancellationToken);
             });
         }
 
-        public IPipeActionRunner<T> SetStreamedPipeAction<T>(Func<HttpContent, HttpContentHeaders, Stream, Task<T>> asyncAction)
+        public IPipeActionRunner<T> SetStreamedPipeAction<T>(Func<HttpContent, HttpContentHeaders, Stream, CancellationToken, Task<T>> asyncAction)
         {
             var runner = new PipeActionRunner<T>(this, asyncAction);
             _pipeActionRunner = runner;
@@ -96,16 +97,16 @@ namespace ChilliSource.Cloud.Web.Api
 
     public interface IPipeActionRunner<T>
     {
-        Task<List<T>> RunPipeActionForContent(HttpContent httpContent);
+        Task<List<T>> RunPipeActionForContent(HttpContent httpContent, CancellationToken cancellationToken);
     }
 
     internal class PipeActionRunner<T> : IPipeActionRunner<T>, IPipeActionRunner
     {
         MultiPartPipedStreamProvider _streamProvider;
-        Func<HttpContent, HttpContentHeaders, Stream, Task<T>> _asyncAction;
-        BufferBlock<Func<Task<T>>> _runtimeActions = null;
+        Func<HttpContent, HttpContentHeaders, Stream, CancellationToken, Task<T>> _asyncAction;
+        BufferBlock<Func<CancellationToken, Task<T>>> _runtimeActions = null;
 
-        public PipeActionRunner(MultiPartPipedStreamProvider streamProvider, Func<HttpContent, HttpContentHeaders, Stream, Task<T>> asyncAction)
+        public PipeActionRunner(MultiPartPipedStreamProvider streamProvider, Func<HttpContent, HttpContentHeaders, Stream, CancellationToken, Task<T>> asyncAction)
         {
             if (asyncAction == null)
                 throw new ArgumentNullException("asyncAction");
@@ -117,31 +118,27 @@ namespace ChilliSource.Cloud.Web.Api
         public void CreateNewReaderTaskForPipe(HttpContent parent, HttpContentHeaders headers, PipedStreamManager pipedStream)
         {
             //This won't get executed just yet. Adding to the list of runtime actions only.
-            _runtimeActions.Post(async () =>
+            _runtimeActions.Post(async (CancellationToken ct) =>
             {
                 using (var reader = pipedStream.CreateReader())
                 {
-                    return await _asyncAction(parent, headers, reader);
+                    return await _asyncAction(parent, headers, reader, ct);
                 }
 
                 //pipe closed on reader.Dispose()
             });
         }
 
-        public async Task<List<T>> RunPipeActionForContent(HttpContent httpContent)
+        public async Task<List<T>> RunPipeActionForContent(HttpContent httpContent, CancellationToken cancellationToken)
         {
-            _runtimeActions = new BufferBlock<Func<Task<T>>>();
+            _runtimeActions = new BufferBlock<Func<CancellationToken, Task<T>>>();
 
             var multiPartTask = Task.Run(async () =>
             {
                 //We need to call this first so the main stream gets parsed into FileStreams.
                 try
                 {
-                    var readAsMultiPartTask = await httpContent.ReadAsMultipartAsync(_streamProvider);
-                }
-                catch (Exception ex)
-                {
-                    /* ignores errors here */
+                    var readAsMultiPartTask = await httpContent.ReadAsMultipartAsync(_streamProvider, cancellationToken);
                 }
                 finally
                 {
@@ -154,13 +151,13 @@ namespace ChilliSource.Cloud.Web.Api
 
             try
             {
-                while (await _runtimeActions.OutputAvailableAsync())
+                while (await _runtimeActions.OutputAvailableAsync(cancellationToken))
                 {
-                    var runtimeAction = await _runtimeActions.ReceiveAsync();
+                    var runtimeAction = await _runtimeActions.ReceiveAsync(cancellationToken);
 
                     try
                     {
-                        results.Add(await runtimeAction());
+                        results.Add(await runtimeAction(cancellationToken));
                     }
                     catch (Exception ex)
                     {
