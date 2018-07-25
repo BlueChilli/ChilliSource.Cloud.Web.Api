@@ -14,19 +14,44 @@ namespace ChilliSource.Cloud.Web.Api
 {
     public class MultiPartPipedStreamProvider : MultipartStreamProvider
     {
+        private const int MinBufferSize = 256;
+        private const int DefaultBufferSize = 32768;
+
         private List<PipedStreamManager> _createdStreams = new List<PipedStreamManager>();
         IPipeActionRunner _pipeActionRunner = null;
         PipedStreamOptions _options = null;
+        int _bufferSize = DefaultBufferSize;
+
+        public int BufferSize
+        {
+            get
+            {
+                return _bufferSize;
+            }
+            set
+            {
+                if (value < MinBufferSize)
+                {
+                    throw new ArgumentException($"Invalid {nameof(BufferSize)} value.");
+                }
+
+                _bufferSize = value;
+            }
+        }
 
         public MultiPartPipedStreamProvider()
+            : this(new PipedStreamOptions()
+            {
+                BlockSize = 16 * 1024,
+                MaxBlocks = 2,
+                AutoFlush = true
+            })
+        { }
+
+        public MultiPartPipedStreamProvider(PipedStreamOptions options)
         {
             //default action does nothing (the stream will get closed by the action runner)
             _pipeActionRunner = new PipeActionRunner<object>(this, (content, headers, stream, cancellationToken) => { return null; });
-        }
-
-        public MultiPartPipedStreamProvider(PipedStreamOptions options)
-            : this()
-        {
             _options = options;
         }
 
@@ -98,6 +123,7 @@ namespace ChilliSource.Cloud.Web.Api
     public interface IPipeActionRunner<T>
     {
         Task<List<T>> RunPipeActionForContent(HttpContent httpContent, CancellationToken cancellationToken);
+        Exception MultipartException { get; }
     }
 
     internal class PipeActionRunner<T> : IPipeActionRunner<T>, IPipeActionRunner
@@ -114,6 +140,8 @@ namespace ChilliSource.Cloud.Web.Api
             _streamProvider = streamProvider;
             _asyncAction = asyncAction;
         }
+
+        public Exception MultipartException { get; private set; }
 
         public void CreateNewReaderTaskForPipe(HttpContent parent, HttpContentHeaders headers, PipedStreamManager pipedStream)
         {
@@ -138,7 +166,11 @@ namespace ChilliSource.Cloud.Web.Api
                 //We need to call this first so the main stream gets parsed into FileStreams.
                 try
                 {
-                    var readAsMultiPartTask = await httpContent.ReadAsMultipartAsync(_streamProvider, cancellationToken);
+                    var readAsMultiPartTask = await httpContent.ReadAsMultipartAsync(_streamProvider, _streamProvider.BufferSize, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    this.MultipartException = ex;
                 }
                 finally
                 {
