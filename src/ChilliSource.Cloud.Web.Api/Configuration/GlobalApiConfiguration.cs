@@ -13,20 +13,17 @@ namespace ChilliSource.Cloud.Web.Api
 
         private GlobalApiConfiguration() { }
 
-        private ApiSection _apiSection;
-
-        public ApiSection GetApiSection(bool throwIfNotSet = true)
+        string _apiKey = null;
+        public string ApiKey
         {
-            if (throwIfNotSet && _apiSection == null)
-                throw new ApplicationException("ApiConfiguration is not set.");
+            get
+            {
+                if (String.IsNullOrEmpty(_apiKey))
+                    throw new ApplicationException("Api key not set.");
 
-            return _apiSection;
-        }
-
-        public GlobalApiConfiguration SetApiSection(ApiSection apiSection)
-        {
-            _apiSection = apiSection;
-            return this;
+                return _apiKey;
+            }
+            set { _apiKey = value; }
         }
     }
 }
